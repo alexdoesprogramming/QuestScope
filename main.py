@@ -573,6 +573,81 @@ class QuestScopeWindow(QMainWindow):
         if self.process_table.rowCount():
             self.process_summary.setText(f"Showing {shown:,} of {self.process_table.rowCount():,} process entries")
 
+    def inspect_process_memory(self):
+        selected = self.process_table.selectionModel().selectedRows()
+        if not selected:
+            self.process_memory_status.setText("Select a process row first.")
+            return
+        row = selected[0].row()
+        pid_item, name_item = self.process_table.item(row, 0), self.process_table.item(row, 1)
+        if not pid_item or not name_item or not self.selected_serial:
+            self.process_memory_status.setText("Connect a headset and select a process.")
+            return
+        if self.memory_worker is not None and self.memory_worker.isRunning():
+            return
+        pid, name = pid_item.text(), name_item.text()
+        self.inspect_memory_button.setEnabled(False)
+        self.process_memory_status.setText(f"Inspecting memory for {name} (PID {pid})…")
+        self.memory_worker = ProcessMemoryWorker(self.adb, self.selected_serial, pid, name)
+        self.memory_worker.completed.connect(self.show_process_memory)
+        self.memory_worker.failed.connect(self.process_memory_failed)
+        self.memory_worker.finished.connect(lambda: self.inspect_memory_button.setEnabled(True))
+        self.memory_worker.start()
+
+    def show_process_memory(self, pid, details):
+        row = next((i for i in range(self.process_table.rowCount())
+                    if self.process_table.item(i, 0) and self.process_table.item(i, 0).text() == pid), None)
+        pss = details.get("pss_kb")
+        value = f"{pss / 1024:.1f} MB PSS" if pss is not None else "Unavailable"
+        if row is not None:
+            self.process_table.setItem(row, 4, QTableWidgetItem(value))
+        detail = value if pss is not None else "PSS total not reported by this Android build"
+        self.process_memory_status.setText(f"{details.get('name', 'Process')} (PID {pid}): {detail}. Point-in-time Android PSS estimate.")
+
+    def process_memory_failed(self, pid, message):
+        self.process_memory_status.setText(f"Memory inspection failed for PID {pid}: {message}")
+
+    def toggle_live_logs(self):
+        if self.log_stream_worker is not None and self.log_stream_worker.isRunning():
+            self.log_stream_worker.stop()
+            self.live_logs_button.setEnabled(False)
+            self.live_logs_button.setText("Stopping…")
+            return
+        if not self.selected_serial:
+            self.log_status.setText("Connect and authorize a Quest first.")
+            return
+        if not self.adb.executable:
+            self.log_status.setText("ADB executable is unavailable.")
+            return
+        self.live_log_lines.clear()
+        self.all_logs = ""
+        self.log_text.clear()
+        self.log_stream_worker = LogStreamWorker(self.adb.executable, self.selected_serial)
+        self.log_stream_worker.line_received.connect(self.receive_live_log_line)
+        self.log_stream_worker.failed.connect(self.live_log_failed)
+        self.log_stream_worker.ended.connect(self.live_log_ended)
+        self.log_stream_worker.start()
+        self.live_logs_button.setText("Stop live stream")
+        self.log_status.setText("Live logcat connected • keeping the latest 5,000 lines.")
+        self.logs_button.setEnabled(False)
+
+    def receive_live_log_line(self, line):
+        self.live_log_lines.append(line)
+        self.all_logs = "\n".join(self.live_log_lines)
+        self.filter_logs(self.log_search.text())
+        self.log_status.setText(f"LIVE • {len(self.live_log_lines):,} lines buffered (max 5,000)")
+
+    def live_log_failed(self, message):
+        self.log_status.setText(message)
+
+    def live_log_ended(self):
+        self.live_logs_button.setEnabled(True)
+        self.live_logs_button.setText("Start live stream")
+        self.logs_button.setEnabled(True)
+        self.log_stream_worker = None
+        if self.log_status.text().startswith("LIVE"):
+            self.log_status.setText("Live stream stopped.")
+
     def capture_logs(self):
         if not self.selected_serial:
             self.log_status.setText("Connect and authorize a Quest first.")
@@ -676,7 +751,10 @@ class QuestScopeWindow(QMainWindow):
         self.timer.stop()
         if self.session_file:
             self.stop_recording()
-        for worker in (self.poll_worker, self.process_worker, self.log_worker):
+        if self.log_stream_worker is not None and self.log_stream_worker.isRunning():
+            self.log_stream_worker.stop()
+            self.log_stream_worker.wait(5000)
+        for worker in (self.poll_worker, self.process_worker, self.log_worker, self.memory_worker):
             if worker is not None and worker.isRunning():
                 worker.wait(35000)
         event.accept()
