@@ -291,7 +291,7 @@ class QuestScopeWindow(QMainWindow):
         self.adb = AdbClient()
         self.selected_serial = None
         self.cpu_previous = None
-        self.poll_worker = self.process_worker = self.log_worker = None
+        self.poll_worker = self.process_worker = self.log_worker = self.log_stream_worker = self.memory_worker = None
         self.session_file = self.session_writer = self.session_path = None
         self.session_samples = 0
         root = QWidget()
