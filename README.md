@@ -1,12 +1,12 @@
 # QuestScope
 
-**A desktop monitoring and diagnostics toolkit for Meta Quest.**
+**A live desktop monitoring and diagnostics toolkit for Meta Quest.**
 
-QuestScope is a Windows-first desktop app for inspecting a connected Quest headset, viewing device information, and investigating logs. It does not require root.
+QuestScope is a Windows-first, root-free desktop dashboard for sampling metrics exposed by a connected Quest through ordinary Android Debug Bridge (ADB) commands.
 
 ## Current status
 
-Early development. The first milestone is a reliable ADB connection layer and a small desktop dashboard. Metrics are only shown when the device actually exposes them.
+The dashboard polls every three seconds in a background worker and plots rolling history for CPU activity, RAM pressure, battery level, and battery temperature when the headset exposes those values. ADB does not expose every hardware sensor on every firmware, so unavailable values are left blank rather than fabricated. Charts retain up to 30 samples.
 
 ## Requirements
 
@@ -17,34 +17,33 @@ Early development. The first milestone is a reliable ADB connection layer and a 
 
 ## Run from source
 
-```powershell
-py -m venv .venv
-.\.venv\Scripts\Activate.ps1
-python -m pip install -r requirements.txt
-python main.py
-```
+    py -m venv .venv
+    .\.venv\Scripts\Activate.ps1
+    python -m pip install -r requirements.txt
+    python main.py
 
-Connect the headset over USB, enable USB debugging, and accept the authorization prompt inside the headset. Then select **Refresh** in QuestScope.
+Connect the headset over USB, enable USB debugging, and accept the authorization prompt inside the headset. Wireless ADB can also work if it is already configured and visible to the local `adb` executable.
 
-## First milestone
+## Features
 
-- Detect whether ADB is installed
-- List connected and authorized devices
-- Read basic device properties and battery information
-- Capture recent logcat output for troubleshooting
-- Explain disconnected, unauthorized, and command-failure states clearly
+- Live ADB connection and authorization status
+- Headset model and Android version
+- Rolling CPU activity chart from `/proc/stat` when readable
+- RAM usage estimate from `/proc/meminfo` when readable
+- Battery level and battery temperature from `dumpsys battery` when reported
+- Recent Android logcat capture
+- Background sampling so slow ADB calls do not block the main window
+- No root, bootloader unlocking, flashing, or headset modification
 
-## Safety and privacy
+## Notes on telemetry
 
-QuestScope uses ordinary ADB commands and does not attempt to root, unlock, flash, or modify the headset. Logs may contain personal information; review them before sharing exported diagnostics.
+CPU activity is calculated from changes in cumulative `/proc/stat` counters; the first sample establishes a baseline. RAM usage is an OS-level estimate, not an app-specific memory breakdown. Battery temperature is the battery sensor reported by Android, not CPU or GPU temperature. Sensor access can vary by Quest model and firmware.
 
-## Development
+Logs can contain personal information; review them before sharing diagnostics.
 
-Run the standard-library tests:
+## Tests
 
-```powershell
-python -m unittest discover -s tests -v
-```
+    python -m unittest discover -s tests -v
 
 ## License
 
