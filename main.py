@@ -115,7 +115,7 @@ class MetricChart(QWidget):
             painter.setBrush(self.color)
             painter.drawEllipse(int(x) - 4, int(y) - 4, 8, 8)
         painter.setPen(QColor("#78849a"))
-        painter.drawText(left, area.bottom() + 14, "60s history")
+        painter.drawText(left, area.bottom() + 14, "90s history")
         painter.drawText(right - 34, area.bottom() + 14, "LIVE")
 
 
