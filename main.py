@@ -55,11 +55,12 @@ def make_panel(title: str, eyebrow: str | None = None) -> tuple[QFrame, QVBoxLay
 class MetricChart(QWidget):
     """Small dependency-free rolling line chart painted with QPainter."""
 
-    def __init__(self, title: str, color: str, suffix: str = "%", parent=None):
+    def __init__(self, title: str, color: str, suffix: str = "%", scale_max: float = 100, parent=None):
         super().__init__(parent)
         self.title = title
         self.color = QColor(color)
         self.suffix = suffix
+        self.scale_max = scale_max
         self.values: deque[float | None] = deque(maxlen=30)
         self.current: float | None = None
         self.setMinimumHeight(175)
@@ -81,7 +82,7 @@ class MetricChart(QWidget):
             y = bottom - int(height * fraction)
             painter.drawLine(left, y, right, y)
         painter.setPen(QColor("#78849a"))
-        painter.drawText(0, top + 5, 22, 16, Qt.AlignmentFlag.AlignRight, "100")
+        painter.drawText(0, top + 5, 22, 16, Qt.AlignmentFlag.AlignRight, str(int(self.scale_max)))
         painter.drawText(0, bottom, 22, 16, Qt.AlignmentFlag.AlignRight, "0")
         if not any(v is not None for v in self.values):
             painter.setPen(QColor("#7f8ba0"))
@@ -96,7 +97,7 @@ class MetricChart(QWidget):
                 started = False
                 continue
             x = left + (width * index / max(1, count - 1))
-            y = bottom - (height * max(0, min(100, value)) / 100)
+            y = bottom - (height * max(0, min(self.scale_max, value)) / self.scale_max)
             if not started:
                 path.moveTo(x, y)
                 started = True
@@ -109,7 +110,7 @@ class MetricChart(QWidget):
         painter.drawPath(path)
         if points and points[-1] is not None:
             x = right
-            y = bottom - (height * max(0, min(100, points[-1])) / 100)
+            y = bottom - (height * max(0, min(self.scale_max, points[-1])) / self.scale_max)
             painter.setPen(Qt.PenStyle.NoPen)
             painter.setBrush(self.color)
             painter.drawEllipse(int(x) - 4, int(y) - 4, 8, 8)
@@ -289,7 +290,7 @@ class QuestScopeWindow(QMainWindow):
         self.cpu_chart = MetricChart("CPU activity", "#aa9cff")
         self.ram_chart = MetricChart("Memory pressure", "#52d6c7")
         self.battery_chart = MetricChart("Battery history", "#8fda7b")
-        self.temp_chart = MetricChart("Battery temperature", "#ffb86b", "°C")
+        self.temp_chart = MetricChart("Battery temperature", "#ffb86b", "°C", scale_max=60)
         self.cpu_value = QLabel("—")
         self.ram_value = QLabel("—")
         self.battery_chart_value = QLabel("—")
