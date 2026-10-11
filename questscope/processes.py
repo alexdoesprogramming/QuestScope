@@ -28,3 +28,14 @@ def parse_process_list(text: str) -> list[dict[str, str]]:
             "state": parts[state_index] if state_index is not None and state_index < len(parts) else "",
         })
     return processes
+
+
+def parse_total_pss_kb(text: str) -> int | None:
+    """Extract total proportional set size in KiB from dumpsys meminfo output."""
+    import re
+    for line in text.splitlines():
+        if re.match(r"^\s*TOTAL(?:\s+PSS)?\s*:?\s+", line, re.IGNORECASE):
+            numbers = re.findall(r"\d+", line)
+            if numbers:
+                return int(numbers[0])
+    return None
