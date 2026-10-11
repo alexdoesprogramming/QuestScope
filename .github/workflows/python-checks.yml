@@ -38,6 +38,6 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: QuestScope-Windows
-          path: dist/QuestScope/QuestScope.exe
+          path: dist/QuestScope/
           if-no-files-found: error
           retention-days: 14
