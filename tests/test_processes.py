@@ -1,5 +1,7 @@
 import unittest
-from questscope.processes import parse_process_list, parse_total_pss_kb, parse_total_pss_kb
+
+from questscope.processes import parse_process_list, parse_total_pss_kb
+
 
 class ProcessParserTests(unittest.TestCase):
     def test_toybox_ps_columns(self):
@@ -19,11 +21,11 @@ class ProcessParserTests(unittest.TestCase):
         self.assertEqual(parse_process_list(""), [])
         self.assertEqual(parse_process_list("no useful columns\n1 2 3"), [])
 
-if __name__ == "__main__":
-    unittest.main()
-
-
     def test_total_pss_formats(self):
         self.assertEqual(parse_total_pss_kb("TOTAL PSS:  12345 TOTAL SWAP PSS: 0"), 12345)
         self.assertEqual(parse_total_pss_kb("TOTAL 12345 6789 111"), 12345)
         self.assertIsNone(parse_total_pss_kb("No memory totals available"))
+
+
+if __name__ == "__main__":
+    unittest.main()
