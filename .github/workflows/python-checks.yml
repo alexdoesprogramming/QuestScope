@@ -33,11 +33,11 @@ jobs:
       - name: Install build dependencies
         run: python -m pip install -r requirements.txt pyinstaller
       - name: Package QuestScope
-        run: python -m PyInstaller --noconfirm --clean --windowed --name QuestScope --collect-all PySide6 main.py
+        run: python -m PyInstaller --noconfirm --clean --onefile --windowed --name QuestScope --collect-all PySide6 main.py
       - name: Upload standalone executable
         uses: actions/upload-artifact@v4
         with:
           name: QuestScope-Windows
-          path: dist/QuestScope/
+          path: dist/QuestScope.exe
           if-no-files-found: error
           retention-days: 14
