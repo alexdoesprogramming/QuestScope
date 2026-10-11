@@ -1,12 +1,14 @@
 """QuestScope: a live, root-free Meta Quest diagnostics suite."""
 from __future__ import annotations
 import csv
+import re
+import subprocess
 import sys
 from collections import deque
 from datetime import datetime
 from pathlib import Path
-from PySide6.QtCore import QThread, QTimer, Qt, Signal
-from PySide6.QtGui import QColor, QPainter, QPainterPath, QPen
+from PySide6.QtCore import QRegularExpression, QThread, QTimer, Qt, Signal
+from PySide6.QtGui import QColor, QPainter, QPainterPath, QPen, QSyntaxHighlighter, QTextCharFormat
 from PySide6.QtWidgets import (
     QApplication, QFileDialog, QFrame, QGridLayout, QHBoxLayout, QHeaderView,
     QLabel, QLineEdit, QListWidget, QMainWindow, QMessageBox, QPushButton,
@@ -15,9 +17,9 @@ from PySide6.QtWidgets import (
 )
 from questscope.adb import AdbClient, AdbError
 from questscope.metrics import cpu_percent, parse_battery, parse_cpu_stat, parse_meminfo
-from questscope.processes import parse_process_list
+from questscope.processes import parse_process_list, parse_total_pss_kb
 
-APP_VERSION = "0.3.0"
+APP_VERSION = "0.4.0"
 STYLE = """
 QWidget { background:#0a0d13; color:#e8ebf5; font-family:'Segoe UI'; font-size:10pt; }
 QMainWindow { background:#0a0d13; }
@@ -184,6 +186,100 @@ class LogWorker(QThread):
             self.completed.emit((True, output or "No log entries returned."))
         except AdbError as exc:
             self.completed.emit((False, str(exc)))
+
+
+class LogHighlighter(QSyntaxHighlighter):
+    """Colorize log severity and common crash/error markers."""
+    def __init__(self, document):
+        super().__init__(document)
+        self.rules = []
+        for pattern, color, bold in [
+            (r"\b(E|F)/[^ ]+|\s+[EF]\s+[^ ]+", "#ff7d91", True),
+            (r"\bW/[^ ]+|\s+W\s+[^ ]+", "#ffbd72", True),
+            (r"(?i)fatal exception|fatal signal|process .* has died|\bcrash(ed)?\b|\banr\b", "#ff657a", True),
+            (r"(?i)exception|traceback|segmentation fault|tombstone", "#ff8fbc", True),
+        ]:
+            fmt = QTextCharFormat()
+            fmt.setForeground(QColor(color))
+            fmt.setFontWeight(700 if bold else 400)
+            self.rules.append((QRegularExpression(pattern), fmt))
+
+    def highlightBlock(self, text):
+        for expression, fmt in self.rules:
+            matches = expression.globalMatch(text)
+            while matches.hasNext():
+                match = matches.next()
+                self.setFormat(match.capturedStart(), match.capturedLength(), fmt)
+
+
+class LogStreamWorker(QThread):
+    line_received = Signal(str)
+    failed = Signal(str)
+    ended = Signal()
+
+    def __init__(self, executable: str, serial: str):
+        super().__init__()
+        self.executable, self.serial = executable, serial
+        self.process = None
+        self._stopping = False
+
+    def run(self):
+        try:
+            self.process = subprocess.Popen(
+                [self.executable, "-s", self.serial, "logcat", "-v", "threadtime"],
+                stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
+                encoding="utf-8", errors="replace", bufsize=1,
+            )
+            while not self._stopping and self.process.stdout is not None:
+                line = self.process.stdout.readline()
+                if not line:
+                    if self.process.poll() is not None:
+                        break
+                    continue
+                self.line_received.emit(line.rstrip("\r\n"))
+            if not self._stopping and self.process.poll() not in (None, 0):
+                self.failed.emit(f"Live logcat exited with code {self.process.returncode}.")
+        except OSError as exc:
+            self.failed.emit(f"Could not start live logcat: {exc}")
+        finally:
+            if self.process is not None:
+                try:
+                    if self.process.poll() is None:
+                        self.process.terminate()
+                        try:
+                            self.process.wait(timeout=2)
+                        except subprocess.TimeoutExpired:
+                            self.process.kill()
+                    if self.process.stdout:
+                        self.process.stdout.close()
+                except OSError:
+                    pass
+            self.ended.emit()
+
+    def stop(self):
+        self._stopping = True
+        if self.process is not None and self.process.poll() is None:
+            try:
+                self.process.terminate()
+            except OSError:
+                pass
+
+
+class ProcessMemoryWorker(QThread):
+    completed = Signal(str, object)
+    failed = Signal(str, str)
+
+    def __init__(self, adb: AdbClient, serial: str, pid: str, process_name: str):
+        super().__init__()
+        self.adb, self.serial, self.pid, self.process_name = adb, serial, pid, process_name
+
+    def run(self):
+        try:
+            output = self.adb.shell(self.serial, "dumpsys", "meminfo", self.pid, timeout=20)
+            pss = parse_total_pss_kb(output)
+            self.completed.emit(self.pid, {"name": self.process_name, "pss_kb": pss})
+        except (AdbError, ValueError) as exc:
+            self.failed.emit(self.pid, str(exc))
 
 
 class QuestScopeWindow(QMainWindow):
