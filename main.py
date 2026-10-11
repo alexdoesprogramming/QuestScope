@@ -644,7 +644,6 @@ class QuestScopeWindow(QMainWindow):
         self.live_logs_button.setEnabled(True)
         self.live_logs_button.setText("Start live stream")
         self.logs_button.setEnabled(True)
-        self.log_stream_worker = None
         if self.log_status.text().startswith("LIVE"):
             self.log_status.setText("Live stream stopped.")
 
