@@ -120,9 +120,9 @@ class MetricChart(QWidget):
 class PollWorker(QThread):
     completed = Signal(dict)
     failed = Signal(str)
-    def __init__(self, adb: AdbClient, previous_cpu):
+    def __init__(self, adb: AdbClient, previous_cpu, previous_serial):
         super().__init__()
-        self.adb, self.previous_cpu = adb, previous_cpu
+        self.adb, self.previous_cpu, self.previous_serial = adb, previous_cpu, previous_serial
     def run(self):
         try:
             devices = self.adb.devices()
@@ -137,7 +137,7 @@ class PollWorker(QThread):
             try:
                 counters = parse_cpu_stat(self.adb.shell(device.serial, "cat", "/proc/stat", timeout=4))
                 if counters is not None:
-                    metrics["cpu"] = cpu_percent(self.previous_cpu, counters)
+                    metrics["cpu"] = cpu_percent(self.previous_cpu if device.serial == self.previous_serial else None, counters)
                     result["cpu_counters"] = counters
             except (AdbError, ValueError):
                 pass
@@ -471,7 +471,7 @@ class QuestScopeWindow(QMainWindow):
         if self.poll_worker is not None and self.poll_worker.isRunning():
             return
         self.refresh_button.setText("◌  Sampling…")
-        self.poll_worker = PollWorker(self.adb, self.cpu_previous)
+        self.poll_worker = PollWorker(self.adb, self.cpu_previous, self.selected_serial)
         self.poll_worker.completed.connect(self.apply_snapshot)
         self.poll_worker.failed.connect(self.poll_failed)
         self.poll_worker.finished.connect(lambda: self.refresh_button.setText("↻  Refresh now"))
@@ -678,7 +678,7 @@ class QuestScopeWindow(QMainWindow):
             self.stop_recording()
         for worker in (self.poll_worker, self.process_worker, self.log_worker):
             if worker is not None and worker.isRunning():
-                worker.wait(2500)
+                worker.wait(35000)
         event.accept()
 
 
