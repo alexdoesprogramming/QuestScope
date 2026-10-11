@@ -31,7 +31,7 @@ Connect the headset over USB, enable USB debugging, and accept the authorization
 - Detect whether ADB is installed
 - List connected and authorized devices
 - Read basic device properties and battery information
-- Stream and filter logcat output
+- Capture recent logcat output for troubleshooting
 - Explain disconnected, unauthorized, and command-failure states clearly
 
 ## Safety and privacy
