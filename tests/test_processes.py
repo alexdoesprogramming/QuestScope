@@ -1,5 +1,5 @@
 import unittest
-from questscope.processes import parse_process_list
+from questscope.processes import parse_process_list, parse_total_pss_kb
 
 class ProcessParserTests(unittest.TestCase):
     def test_toybox_ps_columns(self):
