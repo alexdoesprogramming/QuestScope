@@ -501,6 +501,9 @@ class QuestScopeWindow(QMainWindow):
         self.logs_button = QPushButton("Capture recent logs")
         self.logs_button.clicked.connect(self.capture_logs)
         row.addWidget(self.logs_button)
+        self.live_logs_button = QPushButton("Start live stream")
+        self.live_logs_button.clicked.connect(self.toggle_live_logs)
+        row.addWidget(self.live_logs_button)
         self.save_logs_button = QPushButton("Save logs…")
         self.save_logs_button.clicked.connect(self.save_logs)
         row.addWidget(self.save_logs_button)
@@ -510,10 +513,12 @@ class QuestScopeWindow(QMainWindow):
         box.addWidget(self.log_status)
         self.log_text = QTextEdit()
         self.log_text.setReadOnly(True)
+        self.log_highlighter = LogHighlighter(self.log_text.document())
         self.log_text.setLineWrapMode(QTextEdit.LineWrapMode.NoWrap)
         box.addWidget(self.log_text, 1)
         layout.addWidget(frame, 1)
         self.all_logs = ""
+        self.live_log_lines = deque(maxlen=5000)
         return page
 
     def build_sessions(self):
